@@ -1,0 +1,21 @@
+import { chromium } from '../repo/node_modules/playwright/index.mjs';
+const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://127.0.0.1:5173', { waitUntil: 'load' });
+await page.waitForFunction(() => window.breachline?.game, null, { timeout: 60000 });
+await page.waitForTimeout(2500);
+const fps = () => page.evaluate(() => new Promise(res => { let n = 0; const t = performance.now(); const tick = () => { n++; if (performance.now() - t < 3000) requestAnimationFrame(tick); else res(+(n / ((performance.now() - t) / 1000)).toFixed(2)); }; requestAnimationFrame(tick); }));
+const set = (fn) => page.evaluate(fn).then(() => page.waitForTimeout(3500));
+console.log('baseline (dpr1, PCFsoft 2048)', await fps());
+await set(() => { const g = window.breachline.game; g.renderer.shadowMap.type = 1; g.renderer.shadowMap.needsUpdate = true; g.scene.traverse(o => { if (o.isMesh) o.material.needsUpdate = true; }); });
+console.log('PCF (type1) dpr1', await fps());
+await set(() => { const g = window.breachline.game; g.renderer.shadowMap.enabled = false; g.scene.traverse(o => { if (o.isMesh) o.material.needsUpdate = true; }); });
+console.log('shadows OFF dpr1', await fps());
+await set(() => { const g = window.breachline.game; g.renderer.setPixelRatio(0.75); g.resize(); });
+console.log('shadows OFF dpr0.75', await fps());
+await set(() => { const g = window.breachline.game; g.renderer.setPixelRatio(0.5); g.resize(); });
+console.log('shadows OFF dpr0.5', await fps());
+// hide bots to see cost of 378 bot meshes
+await set(() => { const g = window.breachline.game; g.actors.forEach(a => a.model && (a.model.root.visible = false)); });
+console.log('no bots, shadows OFF dpr0.5', await fps());
+await browser.close();

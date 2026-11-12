@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { World, clamp, raySphere, TEAM } from './world.js';
 import { Models, Effects, WEAPONS } from './models.js';
 import { AudioEngine } from './audio.js';
+import { Quality } from './quality.js';
 const V = THREE.Vector3;
 const UP = new V(0, 1, 0);
 const DIFF = { recruit: { spread: .065, reaction: .55, damage: .72 }, operator: { spread: .038, reaction: .34, damage: 1 }, veteran: { spread: .025, reaction: .22, damage: 1.18 } };
@@ -9,7 +10,7 @@ const angleLerp = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) 
 export class Game {
   constructor(canvas, emit = () => {}) {
     this.canvas = canvas; this.emit = emit; this.state = 'menu'; this.difficulty = 'operator'; this.sensitivity = 1; this.audio = new AudioEngine();
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.renderer.shadowMap.autoUpdate = false; this.renderer.shadowMap.needsUpdate = true; this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.12;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75)); this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.renderer.shadowMap.autoUpdate = false; this.renderer.shadowMap.needsUpdate = true; this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.12; this.renderer.info.autoReset = false;
     this.scene = new THREE.Scene(); this.world = new World(this.scene); this.models = new Models(); this.effects = new Effects(this.scene);
     this.camera = new THREE.PerspectiveCamera(74, 1, .06, 300); this.camera.rotation.order = 'YXZ';
     this.viewScene = new THREE.Scene(); this.viewCamera = new THREE.PerspectiveCamera(55, 1, .01, 10); this.viewScene.add(new THREE.HemisphereLight(0xd5f1f2, 0x6b6250, 2.6)); const vl = new THREE.DirectionalLight(0xffe0b3, 3); vl.position.set(-3, 5, 2); this.viewScene.add(vl); const vf = new THREE.DirectionalLight(0x75d9e4, 1.2); vf.position.set(3, 1, -3); this.viewScene.add(vf);
@@ -17,7 +18,7 @@ export class Game {
     this.keys = new Set(); this.fireHeld = false; this.firePressed = false; this.adsHeld = false; this.touchMove = { x: 0, y: 0 }; this.touchFire = false; this.touchAds = false; this.fallbackLook = false; this.hadLock = false; this.dragging = false;
     this.actors = []; this.grenades = []; this.intel = [new Map(), new Map()]; this.time = 300; this.scores = [0, 0]; this.overtime = false; this.elapsed = 0; this.hudTimer = 0; this.feed = []; this.shake = 0; this.hitFlash = 0; this.damageAngle = 0; this.killBanner = null; this.prompt = null; this.lastFrame = 0; this.acc = 0; this.clock = 0; this.disposed = false;
     this.grenadeGeo = new THREE.SphereGeometry(.12, 10, 8); this.grenadeMat = new THREE.MeshStandardMaterial({ color: 0x4d6452, metalness: .5, roughness: .5 });
-    this.createActors(); this.bind(); this.resize(); this.resetMatch(); this.state = 'menu';
+    this.createActors(); this.quality = new Quality(this.renderer, [this.scene, this.viewScene], this.world.sun, this.effects); this.quality.onScale = () => this.resize(); this.bind(); this.resize(); this.resetMatch(); this.state = 'menu';
     this.loop = this.loop.bind(this); this.raf = requestAnimationFrame(this.loop);
   }
   createActors() {
@@ -53,16 +54,21 @@ export class Game {
     this.onLockError = () => { this.fallbackLook = true; this.emit('toast', 'Pointer capture unavailable — drag to look, click to fire.'); };
     this.onBlur = () => { this.keys.clear(); this.fireHeld = this.adsHeld = false; if (['playing', 'dead'].includes(this.state)) this.pause(); };
     this.onContext = e => e.preventDefault();
-    document.addEventListener('keydown', this.onKeyDown); document.addEventListener('keyup', this.onKeyUp); document.addEventListener('mousemove', this.onMouseMove); document.addEventListener('mousedown', this.onMouseDown); document.addEventListener('mouseup', this.onMouseUp); document.addEventListener('pointerlockchange', this.onLock); document.addEventListener('pointerlockerror', this.onLockError); document.addEventListener('visibilitychange', () => { if (document.hidden) this.onBlur(); }); window.addEventListener('blur', this.onBlur); this.canvas.addEventListener('contextmenu', this.onContext);
+    document.addEventListener('keydown', this.onKeyDown); document.addEventListener('keyup', this.onKeyUp); document.addEventListener('mousemove', this.onMouseMove); document.addEventListener('mousedown', this.onMouseDown); document.addEventListener('mouseup', this.onMouseUp); this.onVisibility = () => { if (document.hidden) this.onBlur(); };
+    this.onContextLost = e => { e.preventDefault(); this.contextLost = true; if (['playing', 'dead'].includes(this.state)) this.pause(); this.emit('toast', 'GRAPHICS CONTEXT LOST · Waiting for the browser to restore it.'); };
+    this.onContextRestored = () => { this.contextLost = false; this.renderer.shadowMap.needsUpdate = true; this.quality.apply(); this.resize(); this.emit('toast', 'GRAPHICS CONTEXT RESTORED · Resume when ready.'); };
+    document.addEventListener('pointerlockchange', this.onLock); document.addEventListener('pointerlockerror', this.onLockError); document.addEventListener('visibilitychange', this.onVisibility); window.addEventListener('blur', this.onBlur); this.canvas.addEventListener('contextmenu', this.onContext);
+    this.canvas.addEventListener('webglcontextlost', this.onContextLost); this.canvas.addEventListener('webglcontextrestored', this.onContextRestored);
   }
   look(dx, dy) { const s = .0022 * this.sensitivity * (this.player.ads ? .58 : 1); this.player.yaw -= dx * s; this.player.pitch = clamp(this.player.pitch - dy * s, -1.42, 1.42); }
-  resize() { const w = window.innerWidth, h = window.innerHeight; this.renderer.setSize(w, h); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); this.viewCamera.aspect = w / h; this.viewCamera.updateProjectionMatrix(); }
+  resize() { const w = window.innerWidth, h = window.innerHeight; if (this.quality) this.renderer.setPixelRatio(this.quality.pixelRatio()); this.renderer.setSize(w, h); this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); this.viewCamera.aspect = w / h; this.viewCamera.updateProjectionMatrix(); }
+  setQuality(mode) { const m = this.quality.setMode(mode); this.resize(); this.emit('quality', this.quality.stats()); return m; }
   requestLock() { if (matchMedia('(pointer: coarse)').matches) return; try { const p = this.canvas.requestPointerLock(); if (p && p.catch) p.catch(() => this.onLockError()); } catch { this.onLockError(); } }
   resetMatch() {
     this.time = 300; this.scores = [0, 0]; this.overtime = false; this.elapsed = 0; this.feed = []; this.killBanner = null; this.hitFlash = 0; this.shake = 0; this.prompt = null; this.intel = [new Map(), new Map()]; this.world.reset(); this.effects.clear();
     for (const g of this.grenades) this.scene.remove(g.mesh); this.grenades.length = 0;
     for (const a of this.actors) { a.kills = a.deaths = a.damage = a.shots = a.hits = a.headshots = 0; a.weaponIndex = 0; a.crouch = false; this.crouchToggle = false; a.ads = false; a.pitch = 0; a.yaw = a.team ? Math.PI : 0; a.vel.set(0, 0, 0); a.vy = 0; a.grenades = 2; a.ammo = WEAPONS.map(w => ({ mag: w.mag, reserve: w.reserve })); this.spawn(a, true); }
-    this.player.pos.set(-10, 0, 23); this.player.yaw = 0; this.switchTimer = 0; this.fireHeld = this.firePressed = this.adsHeld = false; this.keys.clear(); this.touchMove = { x: 0, y: 0 }; this.touchFire = false;
+    this.player.pos.set(-10, 0, 23); this.player.yaw = 0; this.player.switchTimer = 0; this.player.recoilReturn = 0; this.player.recoil = 0; this.fireHeld = this.firePressed = this.adsHeld = false; this.keys.clear(); this.touchMove = { x: 0, y: 0 }; this.touchFire = false;
     this.viewWeapons.forEach((g, i) => g.visible = i === 0); this.emit('feed', this.feed); this.updateHUD();
   }
   deploy() { this.audio.init(); this.resetMatch(); this.state = 'playing'; this.emit('state', this.state); this.requestLock(); this.emit('toast', 'SQUAD LINKED · Advance with your team. First to 30.'); }
@@ -83,7 +89,7 @@ export class Game {
   switchWeapon(i) { if (i < 0 || i > 2 || i === this.player.weaponIndex || !this.player.alive) return; this.player.weaponIndex = i; this.player.reload = null; this.player.switchTimer = .32; this.player.fireCooldown = .3; this.player.ads = false; this.viewWeapons.forEach((g, k) => { g.visible = k === i; g.userData.mag.position.y = g.userData.magY; }); this.audio.reload(); this.updateHUD(); }
   reload(a) { const w = WEAPONS[a.weaponIndex || 0], ammo = a.ammo[a.weaponIndex || 0]; if (!a.alive || a.reload || ammo.mag >= w.mag || ammo.reserve <= 0) return false; a.reload = { time: w.reload, total: w.reload, weapon: a.weaponIndex || 0 }; if (a.id === 0) { this.audio.reload(); this.emit('reload', w.reload); } return true; }
   finishReload(a) { const i = a.reload.weapon, w = WEAPONS[i], ammo = a.ammo[i], n = Math.min(w.mag - ammo.mag, ammo.reserve); ammo.mag += n; ammo.reserve -= n; a.reload = null; if (a.id === 0) this.audio.reload(); }
-  interact() { const p = this.player; for (const s of this.world.pickups) if (s.cooldown <= 0 && Math.hypot(p.pos.x - s.x, p.pos.z - s.z) < 2.2) { if (s.type === 'health') { if (p.hp >= 100 && p.shield >= 50) { this.emit('toast', 'Health and shields already full.'); return; } p.hp = 100; p.shield = 50; } else { p.ammo.forEach((a, i) => a.reserve = WEAPONS[i].reserve); p.grenades = 2; } s.cooldown = 20; this.audio.pickup(); this.emit('toast', s.type === 'health' ? 'FIELD MEDKIT · Health and shields restored.' : 'RESUPPLIED · All reserves and grenades restored.'); return; } this.emit('toast', 'Move within 2 m of a glowing supply station.'); }
+  interact() { const p = this.player; if (!p.alive || this.state !== 'playing') return; for (const s of this.world.pickups) if (s.cooldown <= 0 && Math.hypot(p.pos.x - s.x, p.pos.z - s.z) < 2.2) { if (s.type === 'health') { if (p.hp >= 100 && p.shield >= 50) { this.emit('toast', 'Health and shields already full.'); return; } p.hp = 100; p.shield = 50; } else { p.ammo.forEach((a, i) => a.reserve = WEAPONS[i].reserve); p.grenades = 2; } s.cooldown = 20; this.audio.pickup(); this.emit('toast', s.type === 'health' ? 'FIELD MEDKIT · Health and shields restored.' : 'RESUPPLIED · All reserves and grenades restored.'); return; } this.emit('toast', 'Move within 2 m of a glowing supply station.'); }
   aimPoint(a, target) { const p = this.eye(target); p.y -= .32; return p; }
   hitActors(o, d, max, shooter) {
     let best = null;
@@ -98,6 +104,7 @@ export class Game {
   }
   fire(a, bot = false) {
     const wi = a.weaponIndex || 0, w = WEAPONS[wi], ammo = a.ammo[wi]; if (!a.alive || a.reload || a.fireCooldown > 0 || a.spawnProtection > .9) return;
+    if (bot && !a.target) return;
     if (ammo.mag <= 0) { if (a.id === 0) { this.audio.empty(); this.reload(a); } else this.reload(a); a.fireCooldown = .2; return; }
     ammo.mag--; a.shots++; a.fireCooldown = w.interval; a.flashTimer = .055; a.recoil = Math.min(.13, a.recoil + w.recoil);
     const origin = this.eye(a); let dir = this.direction(a);
@@ -148,10 +155,11 @@ export class Game {
   }
   updatePlayer(dt) {
     const p = this.player; if (!p.alive) return;
-    p.ads = (this.adsHeld || this.touchAds) && !p.reload && !p.sprint; p.crouch = !!this.crouchToggle || this.keys.has('ControlLeft');
+    const wantAds = (this.adsHeld || this.touchAds) && !p.reload; p.crouch = !!this.crouchToggle || this.keys.has('ControlLeft');
     let x = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0) + this.touchMove.x, z = (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0) - this.touchMove.y;
     const len = Math.hypot(x, z); if (len > 1) { x /= len; z /= len; }
-    p.sprint = (this.keys.has('ShiftLeft') || this.touchSprint) && z > .1 && !p.ads && !p.crouch && !this.fireHeld;
+    p.sprint = (this.keys.has('ShiftLeft') || this.touchSprint) && z > .1 && !wantAds && !p.crouch && !this.fireHeld;
+    p.ads = wantAds && !p.sprint;
     const speed = p.crouch ? 2.5 : p.sprint ? 7.3 : p.ads ? 3.1 : 4.7;
     const dx = (Math.cos(p.yaw) * x - Math.sin(p.yaw) * z) * speed, dz = (-Math.sin(p.yaw) * x - Math.cos(p.yaw) * z) * speed;
     p.vel.x = THREE.MathUtils.damp(p.vel.x, dx, 14, dt); p.vel.z = THREE.MathUtils.damp(p.vel.z, dz, 14, dt);
@@ -265,6 +273,7 @@ export class Game {
     const fov = ads ? (w.id === 'dmr' ? 38 : 53) : p.sprint ? 80 : 74; this.camera.fov = THREE.MathUtils.damp(this.camera.fov, fov, 12, dt); this.camera.updateProjectionMatrix();
   }
   render(dt) {
+    if (this.contextLost) return;
     if (this.state === 'menu') { const t = this.clock * .035; this.camera.position.set(31 + Math.sin(t) * 5, 23 + Math.sin(t * .7), 35 + Math.cos(t) * 4); this.camera.lookAt(-2, 1.2, -4); this.camera.fov = 57; this.camera.updateProjectionMatrix(); for (const a of this.actors) if (a.model) { a.model.root.position.copy(a.pos); a.model.root.rotation.y = a.team ? Math.PI : 0; a.model.marker.visible = false; a.anim += dt; a.model.torso.position.y = 1.08 + Math.sin(this.clock * 2 + a.id) * .015; } this.world.update(dt, this.clock); }
     else {
       const p = this.player; if (p.alive) { const eye = this.eye(p); const bob = p.moving > 1 && p.grounded ? Math.sin(p.bob * 2) * .018 : 0; this.camera.position.copy(eye); this.camera.position.y += bob; this.camera.rotation.set(p.pitch + (Math.random() - .5) * this.shake, p.yaw, (Math.random() - .5) * this.shake * .5); }
@@ -275,10 +284,21 @@ export class Game {
     if (this.state !== 'menu' && this.player.alive) { this.renderer.autoClear = false; this.renderer.clearDepth(); this.renderer.render(this.viewScene, this.viewCamera); this.renderer.autoClear = true; }
   }
   loop(ts) {
-    if (this.disposed) return; this.raf = requestAnimationFrame(this.loop); const dt = Math.min(.05, (ts - (this.lastFrame || ts)) / 1000); this.lastFrame = ts;
+    if (this.disposed) return; this.raf = requestAnimationFrame(this.loop); const raw = (ts - (this.lastFrame || ts)) / 1000; const dt = Math.min(.05, raw); this.lastFrame = ts;
+    this.quality.sample(raw); this.renderer.info.reset();
     if (this.state === 'playing' || this.state === 'dead') { this.acc += dt; let n = 0; while (this.acc >= 1 / 60 && n++ < 4) { this.update(1 / 60); this.acc -= 1 / 60; if (this.state === 'over') { this.acc = 0; break; } } }
     else { this.acc = 0; this.clock += this.state === 'menu' ? dt : 0; }
     this.render(dt);
+  }
+  dispose() {
+    if (this.disposed) return; this.disposed = true; cancelAnimationFrame(this.raf);
+    window.removeEventListener('resize', this.onResize); window.removeEventListener('blur', this.onBlur);
+    for (const [t, f] of [['keydown', this.onKeyDown], ['keyup', this.onKeyUp], ['mousemove', this.onMouseMove], ['mousedown', this.onMouseDown], ['mouseup', this.onMouseUp], ['pointerlockchange', this.onLock], ['pointerlockerror', this.onLockError], ['visibilitychange', this.onVisibility]]) document.removeEventListener(t, f);
+    this.canvas.removeEventListener('contextmenu', this.onContext); this.canvas.removeEventListener('webglcontextlost', this.onContextLost); this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    this.audio.dispose?.(); this.effects.dispose?.(); this.world.dispose?.();
+    for (const s of [this.scene, this.viewScene]) s.traverse(o => { if (o.isMesh || o.isSprite || o.isLine) { o.geometry?.dispose(); const m = Array.isArray(o.material) ? o.material : [o.material]; for (const x of m) { if (!x) continue; for (const k of ['map', 'normalMap', 'roughnessMap', 'emissiveMap']) x[k]?.dispose?.(); x.dispose(); } } });
+    this.renderer.dispose();
   }
   minimap() { return { player: { x: this.player.pos.x, z: this.player.pos.z, yaw: this.player.yaw, alive: this.player.alive }, actors: this.actors.filter(a => a.alive).map(a => ({ x: a.pos.x, z: a.pos.z, team: a.team, id: a.id, visible: a.team === 0 || a.model.marker.visible })), pickups: this.world.pickups.map(p => ({ x: p.x, z: p.z, type: p.type, ready: p.cooldown <= 0 })) }; }
 }

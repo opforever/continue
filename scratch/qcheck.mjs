@@ -1,0 +1,33 @@
+import { chromium } from '../repo/node_modules/playwright/index.mjs';
+const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const errors = [];
+page.on('pageerror', e => errors.push('PAGE: ' + e.message));
+page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
+const t0 = Date.now();
+await page.goto('http://127.0.0.1:5173', { waitUntil: 'load' });
+await page.waitForFunction(() => window.breachline?.game, null, { timeout: 60000 });
+console.log('boot ms', Date.now() - t0);
+await page.waitForTimeout(6000);
+console.log('QUALITY', JSON.stringify(await page.evaluate(() => window.breachline.game.quality.stats())));
+const fps = () => page.evaluate(() => new Promise(res => { let n = 0; const t = performance.now(); const tick = () => { n++; if (performance.now() - t < 3000) requestAnimationFrame(tick); else res(+(n / ((performance.now() - t) / 1000)).toFixed(2)); }; requestAnimationFrame(tick); }));
+console.log('auto fps', await fps(), JSON.stringify(await page.evaluate(() => window.breachline.game.quality.stats())));
+let t = Date.now(); await page.screenshot({ path: 'scratch/q-menu.png', timeout: 120000 }); console.log('menu screenshot ms', Date.now() - t);
+// deploy and check gameplay + pause readout
+await page.evaluate(() => { window.breachline.game.requestLock = () => {}; });
+await page.locator('#deployBtn').click();
+await page.waitForTimeout(2500);
+console.log('play fps', await fps());
+t = Date.now(); await page.screenshot({ path: 'scratch/q-play.png', timeout: 120000 }); console.log('play screenshot ms', Date.now() - t);
+await page.evaluate(() => window.breachline.game.pause());
+await page.waitForTimeout(1200);
+console.log('READOUT', await page.locator('#perfReadout').textContent());
+t = Date.now(); await page.screenshot({ path: 'scratch/q-pause.png', timeout: 120000 }); console.log('pause screenshot ms', Date.now() - t);
+// manual quality switch
+await page.locator('[data-quality="high"]').click(); await page.waitForTimeout(1500);
+console.log('HIGH', JSON.stringify(await page.evaluate(() => window.breachline.game.quality.stats())));
+await page.locator('[data-quality="auto"]').click(); await page.waitForTimeout(1000);
+console.log('AUTO', JSON.stringify(await page.evaluate(() => window.breachline.game.quality.stats())));
+console.log('STORE', await page.evaluate(() => localStorage.getItem('breachline.settings.v1')));
+console.log('ERRORS', JSON.stringify(errors));
+await browser.close();

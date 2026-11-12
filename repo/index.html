@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#102a30"><title>BREACHLINE — Drydock 07</title>
+</head>
+<body>
+<canvas id="game" aria-label="Drydock 07 arena viewport" role="img"></canvas>
+<div id="grain"></div>
+<div id="loading" role="status" aria-live="polite"><div class="load-mark">B<span>/</span>L</div><div class="load-line"><i></i></div><p>ESTABLISHING SQUAD UPLINK</p></div>
+
+<header id="topbar">
+  <div class="brand"><svg viewBox="0 0 32 32" class="brand-icon"><path d="M16 2 29 9v14L16 30 3 23V9Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m10 11 6-3 6 3v10l-6 3-6-3Z" fill="currentColor"/><path d="M16 8v16M10 16h12" stroke="#102a30" stroke-width="2"/></svg><div>BREACHLINE<small>TACTICAL ARENA</small></div></div>
+  <div class="top-actions"><button id="manualBtn" class="quiet-btn"><span class="key">?</span> FIELD MANUAL</button><button id="audioBtn" class="quiet-btn audio-btn" aria-label="Toggle audio"><span class="sound-bars"><i></i><i></i><i></i><i></i></span><span id="audioLabel">AUDIO ON</span></button></div>
+</header>
+
+<section id="menu" class="screen">
+  <div class="menu-scrim"></div>
+  <div class="menu-content">
+    <div class="eyebrow"><span class="live-dot"></span> OPERATION 07 <span class="sep">/</span> TEAM DEATHMATCH</div>
+    <h1>DRYDOCK<br><span>07</span><em>PORT DISTRICT<br>34° 02′ N / 118° 15′ W</em></h1>
+    <p class="intro">One squad. Two sides. No second guesses.<br>Lead three allied operators against a hostile fireteam in a close-quarters industrial arena.</p>
+    <div class="mission-chips"><span><b>4V4</b> SQUAD COMBAT</span><span><b>30</b> SCORE LIMIT</span><span><b>5:00</b> ROUND TIME</span></div>
+    <div class="loadout-head"><span>SELECT YOUR PRIMARY</span><span id="loadoutDesc">Versatile. Reliable. Yours.</span></div>
+    <div id="loadouts" class="loadouts" role="group" aria-label="Select your primary weapon">
+      <button class="loadout active" data-weapon="0" aria-pressed="true"><span class="key">1</span><svg viewBox="0 0 120 36"><path d="M4 14h18l5-4h30l4 3h31v5H76l-4 5H58l-3 11h-9l2-12h-8l-4 8h-7l2-10H18L4 24Z"/><path d="M44 6h22v4H44zM78 10h17v3H78z"/></svg><b>VX-4</b><small>CARBINE</small></button>
+      <button class="loadout" data-weapon="1" aria-pressed="false"><span class="key">2</span><svg viewBox="0 0 120 36"><path d="M3 13h25l5-3h35v4h43v5H67l-5 5H49l-4 10h-8l3-11H25L3 25Z"/><path d="M62 17h28v6H62z"/></svg><b>M12</b><small>SHOTGUN</small></button>
+      <button class="loadout" data-weapon="2" aria-pressed="false"><span class="key">3</span><svg viewBox="0 0 120 36"><path d="M2 14h22l6-4h38v4h48v4H84l-6 5H60l-2 10h-9l1-10H35l-8 8h-7l4-11H2Z"/><path d="M40 3h25v7H40zM35 18h4v16h-4zM78 18h4v16h-4z"/></svg><b>KESTREL</b><small>PRECISION</small></button>
+    </div>
+    <button id="deployBtn" class="deploy-btn"><span>DEPLOY TO DRYDOCK</span><svg viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+    <div class="deploy-note"><span class="live-dot"></span> LOCAL SIMULATION <span>•</span> NO DOWNLOADS <span>•</span> <span class="desktop-note">WASD + MOUSE</span><span class="mobile-note">TOUCH READY</span></div>
+  </div>
+  <aside class="intel-card">
+    <div class="intel-top"><span>SQUAD UPLINK</span><span class="status-pill">CONNECTED</span></div>
+    <div class="team-title friendly"><i></i> SPECTRE <small>YOUR TEAM</small></div>
+    <ul class="roster"><li><b>YOU</b><span>SQUAD LEAD</span></li><li><b>ROOK</b><span>ASSAULT</span></li><li><b>NOVA</b><span>FLANK</span></li><li><b>ATLAS</b><span>SUPPORT</span></li></ul>
+    <div class="team-title hostile"><i></i> EMBER <small>HOSTILE</small></div>
+    <p class="enemy-list">WRAITH <span>/</span> CINDER <span>/</span> HEX <span>/</span> FANG</p>
+    <div class="difficulty"><label>THREAT LEVEL</label><div id="difficulty" role="group" aria-label="Threat level"><button data-diff="recruit" aria-pressed="false">RECRUIT</button><button data-diff="operator" class="active" aria-pressed="true">OPERATOR</button><button data-diff="veteran" aria-pressed="false">VETERAN</button></div><p id="diffDesc">Balanced reactions. Tactical pressure.</p></div>
+  </aside>
+  <div class="menu-footer"><span>BREACHLINE // BUILD 1.0</span><span>PROCEDURAL ARENA · LIVE AI · WEBGL</span></div>
+</section>
+
+<div id="hud" class="hidden">
+  <div id="damageVignette"></div><div id="damageArrow">▲</div>
+  <div class="minimap-wrap"><div class="micro"><span>TACTICAL UPLINK</span><span id="bearing">N 000</span></div><canvas id="minimap" width="220" height="184"></canvas><div class="map-caption">DRYDOCK 07 <span>● LIVE</span></div></div>
+  <div class="scorestrip"><div class="score-team blue"><span>SPECTRE</span><b id="blueScore">00</b><i><em id="blueBar"></em></i></div><div class="match-clock"><small>TEAM DEATHMATCH / 30</small><b id="clock">5:00</b><span id="overtime" class="hidden">SUDDEN DEATH</span></div><div class="score-team orange"><span>EMBER</span><b id="orangeScore">00</b><i><em id="orangeBar"></em></i></div></div>
+  <div id="killfeed"></div>
+  <button id="pauseBtn" class="hud-pause" aria-label="Pause">Ⅱ</button>
+  <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div><div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div id="killBanner"><b></b><span></span></div>
+  <div id="spawnShield" class="hidden">SPAWN SHIELD ACTIVE</div>
+  <div class="squad-panel"><div class="micro">SPECTRE ACTUAL <span id="squadCount">4/4</span></div><div id="squadList"></div><div class="stance"><span id="stanceIcon">◆</span><span id="stanceText">OPERATOR ONLINE</span></div></div>
+  <div class="vitals"><div class="health-row"><span class="med-icon">+</span><b id="hp">100</b><small>HEALTH</small><span class="shield-icon">⬡</span><b id="shield">50</b></div><div class="bar health"><i id="hpBar"></i></div><div class="bar shield"><i id="shieldBar"></i></div><div class="micro vital-note">SHIELDS RECHARGE OUT OF COMBAT</div></div>
+  <div class="ammo-panel"><div class="weapon-label"><span id="weaponName">VX-4</span><small id="weaponType">ASSAULT CARBINE</small></div><div class="ammo-count"><b id="mag">30</b><span>/ <span id="reserve">180</span></span></div><div class="ammo-meta"><span id="fireMode">AUTO · 650 RPM</span><span>◈ <b id="grenades">2</b> <small>G</small></span></div><div class="weapon-slots" role="group" aria-label="Weapon slots"><button data-slot="0" class="active"><span>1</span>VX-4</button><button data-slot="1"><span>2</span>M12</button><button data-slot="2"><span>3</span>KESTREL</button></div></div>
+  <div id="reloadIndicator" class="hidden"><span>RELOADING</span><div><i id="reloadBar"></i></div></div>
+  <div id="interactPrompt" class="hidden"><span class="key">E</span><span id="promptText"></span></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div class="hud-hint">R RELOAD <span>·</span> G GRENADE <span>·</span> SHIFT SPRINT <span>·</span> TAB SCORES <span>·</span> ESC PAUSE</div>
+</div>
+
+<section id="death" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Operator down"><div class="death-card"><div class="eyebrow hostile-text">SQUAD LEAD DOWN</div><h2>SIGNAL LOST</h2><p>Eliminated by <b id="killerName">WRAITH</b> <span id="killerWeapon">VX-4</span></p><div class="respawn-ring"><b id="respawnCount">3</b><small>REDEPLOYING</small></div><p class="dim">Your squad is still in the fight.</p></div></section>
+
+<section id="pause" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Match paused"><div class="modal-card pause-card"><div class="eyebrow">OPERATION ON HOLD</div><h2>TAKE A BREATH.</h2><p>The simulation is paused. Your squad will wait.</p><button id="resumeBtn" class="deploy-btn"><span>RETURN TO THE FIGHT</span><span>→</span></button><div class="pause-options"><button id="restartBtn" class="outline-btn">RESTART MATCH</button><button id="quitBtn" class="outline-btn">LEAVE OPERATION</button></div><div class="settings-row"><label>MOUSE SENSITIVITY <input id="sensitivity" type="range" min="0.4" max="2" step="0.1" value="1"></label><button id="pauseAudio" class="outline-btn">AUDIO ON</button></div><div class="settings-row"><label>RENDER QUALITY</label><div id="quality" class="seg" role="group" aria-label="Render quality"><button data-quality="auto" class="active" aria-pressed="true">AUTO</button><button data-quality="high" aria-pressed="false">HIGH</button><button data-quality="balanced" aria-pressed="false">BALANCED</button><button data-quality="performance" aria-pressed="false">PERF</button></div></div><div id="perfReadout" class="perf-readout">MEASURING RENDER…</div><button id="pauseManual" class="text-btn">OPEN FIELD MANUAL →</button></div></section>
+
+<section id="manual" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Field manual"><div class="modal-card manual-card"><button id="closeManual" class="close-btn" aria-label="Close">×</button><div class="eyebrow">BREACHLINE / FIELD MANUAL</div><h2>KNOW YOUR KIT.</h2><div class="manual-grid"><div><h3>MOVEMENT</h3><dl><dt>W A S D</dt><dd>Move</dd><dt>MOUSE</dt><dd>Look / left-click fire</dd><dt>RIGHT CLICK</dt><dd>Aim down sights</dd><dt>SHIFT</dt><dd>Sprint (weapon lowered)</dd><dt>SPACE</dt><dd>Jump / vault low barriers</dd><dt>C / CTRL</dt><dd>Toggle / hold crouch</dd></dl></div><div><h3>COMBAT</h3><dl><dt>R</dt><dd>Reload</dd><dt>1 / 2 / 3</dt><dd>Switch primary weapon</dd><dt>G</dt><dd>Throw grenade (2.1 s fuse)</dd><dt>E</dt><dd>Use nearby supply station</dd><dt>TAB</dt><dd>Hold scoreboard</dd><dt>ESC / M</dt><dd>Pause / mute audio</dd></dl></div></div><div class="manual-tips"><p><b>WIN THE ROUND.</b> First team to 30 eliminations wins. Highest score at 5:00 wins; a tie triggers sudden death.</p><p><b>STAY IN THE FIGHT.</b> Shields regenerate after six seconds without damage. Medkits restore health/shields; ammo crates refill reserves and grenades. Red fuel drums explode.</p><p><b>USE YOUR SQUAD.</b> Cyan markers identify allies. Orange markers reveal hostiles in line of sight. Bots share contact intel, flank, reload behind cover, and recover at medkits.</p><p><b>TOUCH.</b> Left stick moves; drag the right side to look. Use the labeled fire, aim, reload, jump, grenade, and weapon buttons.</p><p><b>PERFORMANCE.</b> Render quality is in the pause menu. AUTO trims resolution to hold frame rate; PERF drops shadow filtering, grain and blur for weak devices. Sensitivity, audio, quality, threat level and loadout are remembered between visits.</p></div></div></section>
+
+<section id="scoreboard" class="overlay hidden" role="dialog" aria-label="Scoreboard"><div class="modal-card board-card"><div class="eyebrow">LIVE OPERATION STATUS</div><h2>SCOREBOARD</h2><div id="boardTeams"></div><p class="dim">Hold TAB to view · Release to return</p></div></section>
+
+<section id="results" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Match results"><div class="modal-card results-card"><div id="resultEyebrow" class="eyebrow">OPERATION COMPLETE</div><h2 id="resultTitle">VICTORY</h2><div id="resultScore" class="result-score">30 — 22</div><div id="resultStats" class="result-stats"></div><div id="resultBoard"></div><div class="pause-options"><button id="rematchBtn" class="deploy-btn"><span>REDEPLOY SQUAD</span><span>→</span></button><button id="resultMenuBtn" class="outline-btn">RETURN TO BASE</button></div></div></section>
+
+<div id="touch" class="hidden"><div id="stick"><i></i><span>MOVE</span></div><div class="touch-look">DRAG TO LOOK</div><div class="touch-buttons"><button data-touch="fire" class="touch-fire">FIRE</button><button data-touch="ads">AIM</button><button data-touch="reload">RELOAD</button><button data-touch="jump">JUMP</button><button data-touch="grenade">GRENADE</button><button data-touch="sprint">SPRINT</button><button data-touch="crouch">CROUCH</button><button data-touch="switch">WEAPON</button><button data-touch="use">USE</button></div></div>
+<div id="webglError" class="overlay hidden" role="alertdialog" aria-label="WebGL unavailable"><div class="modal-card"><h2>WEBGL UNAVAILABLE</h2><p>This operation needs hardware-accelerated WebGL. Enable it in your browser settings and reload.</p><button class="deploy-btn" onclick="location.reload()">RETRY UPLINK</button></div></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

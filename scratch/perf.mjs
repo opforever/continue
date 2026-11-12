@@ -1,0 +1,27 @@
+import { chromium } from '../repo/node_modules/playwright/index.mjs';
+const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://127.0.0.1:5173', { waitUntil: 'load' });
+await page.waitForFunction(() => window.breachline?.game, null, { timeout: 60000 });
+await page.waitForTimeout(2000);
+const census = await page.evaluate(() => {
+  const g = window.breachline.game; const counts = {};
+  const walk = (o, tag) => { let n = 0; o.traverse(c => { if (c.isMesh && c.visible) n++; }); counts[tag] = n; };
+  walk(g.scene, 'sceneMeshes');
+  counts.bots = g.actors.filter(a => a.model).reduce((s, a) => { let n = 0; a.model.root.traverse(c => { if (c.isMesh) n++; }); return s + n; }, 0);
+  counts.instanced = (() => { let n = 0; g.scene.traverse(c => { if (c.isInstancedMesh) n++; }); return n; })();
+  counts.viewScene = (() => { let n = 0; g.viewScene.traverse(c => { if (c.isMesh) n++; }); return n; })();
+  const gl = g.renderer.getContext(); const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  counts.renderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'n/a';
+  return counts;
+});
+console.log('CENSUS', JSON.stringify(census));
+const fps = () => page.evaluate(() => new Promise(res => { let n = 0; const t = performance.now(); const tick = () => { n++; if (performance.now() - t < 2500) requestAnimationFrame(tick); else res(+(n / ((performance.now() - t) / 1000)).toFixed(2)); }; requestAnimationFrame(tick); }));
+console.log('baseline fps', await fps());
+await page.evaluate(() => { const g = window.breachline.game; g.renderer.shadowMap.enabled = false; g.scene.traverse(o => { if (o.isMesh) o.material.needsUpdate = true; }); });
+console.log('no-shadow fps', await fps());
+await page.evaluate(() => { const g = window.breachline.game; g.renderer.setPixelRatio(0.5); g.resize(); });
+console.log('no-shadow + 0.5dpr fps', await fps());
+await page.evaluate(() => { const g = window.breachline.game; g.renderer.shadowMap.enabled = true; g.renderer.shadowMap.type = 0; g.renderer.shadowMap.needsUpdate = true; g.scene.traverse(o => { if (o.isMesh) o.material.needsUpdate = true; }); });
+console.log('basic-shadow + 0.5dpr fps', await fps());
+await browser.close();

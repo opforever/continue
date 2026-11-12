@@ -13,13 +13,30 @@ const show = (id, yes) => $(id).classList.toggle('hidden', !yes);
 let game, selectedWeapon = 0, manualOpen = false, boardOpen = false, toastTimer, hitTimer, killTimer, lastFeedKey = '', lastHud;
 const coarse = matchMedia('(pointer: coarse)').matches;
 const refs = {};
+// Persisted operator preferences (survive reloads; never block boot if storage is unavailable).
+const STORE_KEY = 'breachline.settings.v1';
+const settings = { sensitivity: 1, muted: false, quality: 'auto', difficulty: 'operator', weapon: 0 };
+function loadSettings() { try { const raw = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); for (const k of Object.keys(settings)) if (raw[k] !== undefined && typeof raw[k] === typeof settings[k]) settings[k] = raw[k]; } catch { /* private mode */ } settings.sensitivity = Math.min(2, Math.max(.4, settings.sensitivity || 1)); settings.weapon = [0, 1, 2].includes(settings.weapon) ? settings.weapon : 0; if (!['auto', 'high', 'balanced', 'performance'].includes(settings.quality)) settings.quality = 'auto'; if (!['recruit', 'operator', 'veteran'].includes(settings.difficulty)) settings.difficulty = 'operator'; }
+function saveSettings() { try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch { /* private mode */ } }
+let perfTimer = null;
+function updatePerf() {
+  if (!game) return; const q = game.quality.stats(), info = game.renderer.info.render, el = $('perfReadout');
+  el.classList.toggle('warn', q.fps < 40);
+  el.innerHTML = `<i></i><b>${q.fps} FPS</b> ${q.label} · ${q.ratio.toFixed(2)}× RES · ${info.calls} DRAWS · ${Math.round(info.triangles / 1000)}K TRIS${q.mode === 'auto' ? ` · AUTO (${q.reason})` : ''}`;
+}
+function updateQuality(q) {
+  document.querySelectorAll('[data-quality]').forEach(b => { const on = b.dataset.quality === q.mode; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+  updatePerf();
+}
 for (const id of ['blueScore', 'orangeScore', 'blueBar', 'orangeBar', 'clock', 'overtime', 'hp', 'shield', 'hpBar', 'shieldBar', 'mag', 'reserve', 'weaponName', 'weaponType', 'fireMode', 'grenades', 'squadList', 'squadCount', 'stanceText', 'stanceIcon', 'reloadIndicator', 'reloadBar', 'interactPrompt', 'promptText', 'spawnShield', 'crosshair', 'bearing', 'respawnCount', 'damageVignette', 'damageArrow']) refs[id] = $(id);
 function toast(text) { $('toast').textContent = text; $('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3200); }
 function setState(state) {
-  document.body.className = state;
+  document.body.classList.remove('menu', 'playing', 'dead', 'paused', 'over'); document.body.classList.add(state);
   show('menu', state === 'menu'); show('hud', ['playing', 'dead', 'paused'].includes(state)); show('death', state === 'dead'); show('pause', state === 'paused'); show('results', state === 'over'); show('touch', coarse && state === 'playing');
   if (state !== 'playing') { show('scoreboard', false); boardOpen = false; }
   if (state === 'menu') { show('manual', false); manualOpen = false; }
+  clearInterval(perfTimer); perfTimer = null;
+  if (state === 'paused') { updatePerf(); perfTimer = setInterval(updatePerf, 500); }
 }
 function feedHTML(feed) { return feed.map(f => `<div class="feed-row"><span class="${f.team ? 'orange' : 'blue'}">${f.killer}</span><span class="weapon">${f.weapon}</span>${f.head ? '<span class="head">⌖</span>' : '<span class="dim">›</span>'}<span class="${f.team ? 'blue' : 'orange'}">${f.victim}</span></div>`).join(''); }
 function boardHTML(actors, scores, live = false) {
@@ -62,9 +79,10 @@ function emit(type, data) {
   else if (type === 'respawn') { toast('REDEPLOYED · Spawn shield active.'); $('killBanner').classList.remove('show'); }
   else if (type === 'scoreboard') { boardOpen = data; show('scoreboard', data); if (data) $('boardTeams').innerHTML = boardHTML(game.actors, game.scores, true); }
   else if (type === 'mute') updateAudio(data);
+  else if (type === 'quality') updateQuality(data);
   else if (type === 'feed') { lastFeedKey = ''; $('killfeed').innerHTML = ''; }
   else if (type === 'end') {
-    show('results', true); show('hud', false); show('death', false); show('touch', false); document.body.className = 'over';
+    show('results', true); show('hud', false); show('death', false); show('touch', false); document.body.classList.remove('menu', 'playing', 'dead', 'paused'); document.body.classList.add('over');
     $('results').querySelector('.results-card').classList.toggle('defeat', !data.win); $('resultTitle').textContent = data.win ? 'VICTORY' : 'DEFEAT'; $('resultEyebrow').textContent = data.win ? 'SPECTRE ACTUAL / OPERATION COMPLETE' : 'SPECTRE ACTUAL / OPERATION LOST'; $('resultScore').textContent = `${data.scores[0]} — ${data.scores[1]}`;
     const p = game.player; $('resultStats').innerHTML = `<div><b>${p.kills}</b><span>ELIMINATIONS</span></div><div><b>${p.deaths}</b><span>DEATHS</span></div><div><b>${data.accuracy}%</b><span>ACCURACY</span></div><div><b>${data.headshots}</b><span>HEADSHOTS</span></div>`;
     $('resultBoard').innerHTML = boardHTML(data.actors, data.scores); $('scoreboard').classList.add('hidden'); boardOpen = false;
@@ -77,10 +95,11 @@ function closeManual() { manualOpen = false; show('manual', false); }
 function bindUI() {
   $('deployBtn').onclick = deploy; $('resumeBtn').onclick = () => game.resume(); $('restartBtn').onclick = deploy; $('rematchBtn').onclick = deploy; $('quitBtn').onclick = () => game.toMenu(); $('resultMenuBtn').onclick = () => game.toMenu(); $('pauseBtn').onclick = () => game.pause();
   $('manualBtn').onclick = openManual; $('pauseManual').onclick = openManual; $('closeManual').onclick = closeManual;
-  $('audioBtn').onclick = () => { game.audio.init(); updateAudio(game.audio.toggle()); }; $('pauseAudio').onclick = () => updateAudio(game.audio.toggle());
-  $('sensitivity').oninput = e => game.sensitivity = +e.target.value;
-  document.querySelectorAll('[data-weapon]').forEach(b => b.onclick = () => { selectedWeapon = +b.dataset.weapon; document.querySelectorAll('[data-weapon]').forEach(x => x.classList.toggle('active', x === b)); $('loadoutDesc').textContent = WEAPONS[selectedWeapon].desc; game.audio.click(); });
-  document.querySelectorAll('[data-diff]').forEach(b => b.onclick = () => { game.setDifficulty(b.dataset.diff); document.querySelectorAll('[data-diff]').forEach(x => x.classList.toggle('active', x === b)); $('diffDesc').textContent = { recruit: 'Slower reactions. Room to learn.', operator: 'Balanced reactions. Tactical pressure.', veteran: 'Fast reactions. Lethal accuracy.' }[b.dataset.diff]; game.audio.click(); });
+  $('audioBtn').onclick = () => { game.audio.init(); settings.muted = game.audio.toggle(); saveSettings(); updateAudio(settings.muted); }; $('pauseAudio').onclick = () => { settings.muted = game.audio.toggle(); saveSettings(); updateAudio(settings.muted); };
+  $('sensitivity').oninput = e => { game.sensitivity = +e.target.value; settings.sensitivity = game.sensitivity; saveSettings(); };
+  document.querySelectorAll('[data-quality]').forEach(b => b.onclick = () => { settings.quality = game.setQuality(b.dataset.quality); saveSettings(); game.audio.click(); });
+  document.querySelectorAll('[data-weapon]').forEach(b => b.onclick = () => { selectedWeapon = +b.dataset.weapon; settings.weapon = selectedWeapon; saveSettings(); document.querySelectorAll('[data-weapon]').forEach(x => { x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b)); }); $('loadoutDesc').textContent = WEAPONS[selectedWeapon].desc; game.audio.click(); });
+  document.querySelectorAll('[data-diff]').forEach(b => b.onclick = () => { game.setDifficulty(b.dataset.diff); settings.difficulty = b.dataset.diff; saveSettings(); document.querySelectorAll('[data-diff]').forEach(x => { x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b)); }); $('diffDesc').textContent = { recruit: 'Slower reactions. Room to learn.', operator: 'Balanced reactions. Tactical pressure.', veteran: 'Fast reactions. Lethal accuracy.' }[b.dataset.diff]; game.audio.click(); });
   document.querySelectorAll('[data-slot]').forEach(b => b.onclick = () => game.switchWeapon(+b.dataset.slot));
   document.addEventListener('keydown', e => { if (e.key === '?' && ['menu', 'paused'].includes(game.state)) openManual(); if (e.code === 'Escape' && manualOpen) closeManual(); });
   // Touch look is independent of the movement stick and action buttons.
@@ -100,8 +119,21 @@ function bindUI() {
 async function boot() {
   try {
     await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2500))]);
-    game = new Game($('game'), emit); bindUI(); setState('menu'); window.breachline = { game };
+    loadSettings();
+    game = new Game($('game'), emit); bindUI();
+    game.sensitivity = settings.sensitivity; $('sensitivity').value = String(settings.sensitivity);
+    game.audio.muted = settings.muted; updateAudio(settings.muted);
+    game.setDifficulty(settings.difficulty);
+    document.querySelectorAll('[data-diff]').forEach(x => { const on = x.dataset.diff === settings.difficulty; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
+    $('diffDesc').textContent = { recruit: 'Slower reactions. Room to learn.', operator: 'Balanced reactions. Tactical pressure.', veteran: 'Fast reactions. Lethal accuracy.' }[settings.difficulty];
+    selectedWeapon = settings.weapon;
+    document.querySelectorAll('[data-weapon]').forEach(x => { const on = +x.dataset.weapon === selectedWeapon; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
+    $('loadoutDesc').textContent = WEAPONS[selectedWeapon].desc;
+    updateQuality(game.quality.stats()); if (settings.quality !== 'auto') game.setQuality(settings.quality);
+    setState('menu'); window.breachline = { game, settings };
     setTimeout(() => show('loading', false), 350);
   } catch (err) { console.error('BREACHLINE initialization failed:', err); show('loading', false); show('webglError', true); }
 }
 boot();
+// Dev hot-reload must not leave a second animation loop or input listeners behind.
+if (import.meta.hot) import.meta.hot.dispose(() => { clearInterval(perfTimer); game?.dispose(); });

@@ -9,6 +9,7 @@ export class AudioEngine {
     }
     if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
   }
+  dispose() { try { this.wind?.stop(); this.ctx?.close(); } catch { /* already closed */ } this.ctx = null; this.master = null; }
   toggle() { this.muted = !this.muted; if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : .38, this.ctx.currentTime, .03); return this.muted; }
   tone(freq, duration, volume = .2, type = 'sine', end = freq, delay = 0) {
     if (!this.ctx || this.muted) return; const t = this.ctx.currentTime + delay, o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, end), t + duration); g.gain.setValueAtTime(volume, t); g.gain.exponentialRampToValueAtTime(.001, t + duration); o.connect(g); g.connect(this.master); o.start(t); o.stop(t + duration + .02); o.onended = () => { o.disconnect(); g.disconnect(); };
