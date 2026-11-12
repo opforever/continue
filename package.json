@@ -1,0 +1,9 @@
+{
+  "name": "breachline-drydock",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite --host 0.0.0.0", "build": "vite build", "preview": "vite preview --host 0.0.0.0", "test": "node tests/smoke.mjs" },
+  "dependencies": { "three": "0.180.0", "@fontsource/barlow-condensed": "^5.2.6", "@fontsource/ibm-plex-sans": "^5.2.6" },
+  "devDependencies": { "vite": "^6.3.5", "playwright": "^1.56.0" }
+}
