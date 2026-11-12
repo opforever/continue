@@ -6,6 +6,12 @@ import { Quality } from './quality.js';
 const V = THREE.Vector3;
 const UP = new V(0, 1, 0);
 const DIFF = { recruit: { spread: .065, reaction: .55, damage: .72 }, operator: { spread: .038, reaction: .34, damage: 1 }, veteran: { spread: .025, reaction: .22, damage: 1.18 } };
+// The weapon meshes are authored at world scale (~1.3 m long). Rendered unscaled in the
+// view pass the stock ended up behind the near plane, so the gun filled the screen as a
+// giant rail. Scale the viewmodel and push it forward so the whole weapon stays in front
+// of the eye; ADS then aligns the actual sight height with the camera axis.
+const VIEW_SCALE = .62;
+const SIGHT_Y = { dmr: .245, default: .224 };
 const angleLerp = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
 export class Game {
   constructor(canvas, emit = () => {}) {
@@ -14,7 +20,7 @@ export class Game {
     this.scene = new THREE.Scene(); this.world = new World(this.scene); this.models = new Models(); this.effects = new Effects(this.scene);
     this.camera = new THREE.PerspectiveCamera(74, 1, .06, 300); this.camera.rotation.order = 'YXZ';
     this.viewScene = new THREE.Scene(); this.viewCamera = new THREE.PerspectiveCamera(55, 1, .01, 10); this.viewScene.add(new THREE.HemisphereLight(0xd5f1f2, 0x6b6250, 2.6)); const vl = new THREE.DirectionalLight(0xffe0b3, 3); vl.position.set(-3, 5, 2); this.viewScene.add(vl); const vf = new THREE.DirectionalLight(0x75d9e4, 1.2); vf.position.set(3, 1, -3); this.viewScene.add(vf);
-    this.viewWeapons = WEAPONS.map((_, i) => { const g = this.models.weapon(i, 0); g.visible = i === 0; g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } }); this.viewScene.add(g); return g; });
+    this.viewWeapons = WEAPONS.map((_, i) => { const g = this.models.weapon(i, 0); g.visible = i === 0; g.scale.setScalar(VIEW_SCALE); g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; if (o.material === this.models.m.glass) { o.material = this.models.m.glass.clone(); o.material.opacity = .16; o.material.metalness = .1; } } }); this.viewScene.add(g); return g; });
     this.keys = new Set(); this.fireHeld = false; this.firePressed = false; this.adsHeld = false; this.touchMove = { x: 0, y: 0 }; this.touchFire = false; this.touchAds = false; this.fallbackLook = false; this.hadLock = false; this.dragging = false;
     this.actors = []; this.grenades = []; this.intel = [new Map(), new Map()]; this.time = 300; this.scores = [0, 0]; this.overtime = false; this.elapsed = 0; this.hudTimer = 0; this.feed = []; this.shake = 0; this.hitFlash = 0; this.damageAngle = 0; this.killBanner = null; this.prompt = null; this.lastFrame = 0; this.acc = 0; this.clock = 0; this.disposed = false;
     this.grenadeGeo = new THREE.SphereGeometry(.12, 10, 8); this.grenadeMat = new THREE.MeshStandardMaterial({ color: 0x4d6452, metalness: .5, roughness: .5 });
@@ -262,13 +268,13 @@ export class Game {
     const p = this.player, g = this.viewWeapons[p.weaponIndex], w = WEAPONS[p.weaponIndex];
     const ads = p.ads && p.alive, reload = p.reload, sw = p.switchTimer;
     p.switchTimer = Math.max(0, sw - dt); const bob = p.moving > .5 && p.grounded ? Math.sin(p.bob) * .012 * (ads ? .25 : 1) : Math.sin(this.clock * 1.5) * .002;
-    const base = ads ? new V(0, w.id === 'dmr' ? -.245 : -.224, -.31) : new V(.29, -.3 + bob, -.43);
-    if (p.sprint) { base.y -= .12; base.x -= .05; }
+    const base = ads ? new V(0, -(w.id === 'dmr' ? SIGHT_Y.dmr : SIGHT_Y.default) * VIEW_SCALE, -.55) : new V(.24, -.26 + bob, -.62);
+    if (p.sprint) { base.y -= .075; base.x -= .03; }
     let rz = 0, rx = 0;
     if (reload) { const t = 1 - reload.time / reload.total, s = Math.sin(t * Math.PI); rz = -.48 * s; rx = .22 * s; g.userData.mag.position.y = g.userData.magY - Math.sin(Math.min(1, t * 1.3) * Math.PI) * .32; g.userData.mag.rotation.x = -.3 * s; g.userData.bolt.position.z = g.userData.boltZ + (t > .78 ? Math.sin((t - .78) / .22 * Math.PI) * .08 : 0); }
     else { g.userData.mag.position.y = g.userData.magY; g.userData.mag.rotation.x = 0; g.userData.bolt.position.z = g.userData.boltZ; }
-    if (sw > 0) base.y -= Math.sin(sw / .32 * Math.PI) * .3;
-    base.z += p.recoil * .7; rx += p.recoil * 1.5; if (p.sprint) { rz -= .3; rx += .2; }
+    if (sw > 0) base.y -= Math.sin(sw / .32 * Math.PI) * .19;
+    base.z += p.recoil * .45; rx += p.recoil * 1.5; if (p.sprint) { rz -= .3; rx += .2; }
     g.position.lerp(base, Math.min(1, dt * 16)); g.rotation.set(rx, ads ? 0 : .035, rz); g.userData.flash.visible = p.flashTimer > 0 && p.alive; g.userData.flash.rotation.z = Math.random() * 6; if (g.userData.flash.userData.light) g.userData.flash.userData.light.intensity = p.flashTimer > 0 ? 3 : 0;
     const fov = ads ? (w.id === 'dmr' ? 38 : 53) : p.sprint ? 80 : 74; this.camera.fov = THREE.MathUtils.damp(this.camera.fov, fov, 12, dt); this.camera.updateProjectionMatrix();
   }

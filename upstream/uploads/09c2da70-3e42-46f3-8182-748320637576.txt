@@ -1,0 +1,36 @@
+A self-contained, browser-playable 3D team deathmatch: the player and three allied bots against four enemy bots.
+
+- Created the Vite/Three.js project with locally bundled fonts and assets; no runtime CDN dependency.
+- Chosen architecture: procedural Three.js arena, separate FPS simulation/UI modules, analytic collision/hitscan, grid-pathfinding bots, synthesized audio.
+- Match rules: 4v4, first to 30 kills or best score after five minutes; tied matches enter sudden death. Three switchable detailed weapons, ADS, reload, sprint, crouch, jump, grenades, resupply, respawns.
+- Next: build the arena, shared geometry/material batches, collision data, and navigation grid.
+
+- `npm install`
+- `npm run dev -- --port 5173`
+- Production: `npm run build`, then`npm run preview -- --port 4173`.
+
+WASD move · mouse look/fire · right mouse aim · Shift sprint · Space jump · C/Ctrl crouch · R reload · 1/2/3 weapons · G grenade · E resupply · Tab scoreboard · Esc pause. Touch controls are included.
+
+The README is updated after each implementation step. Source files live in `src/`; tests live in `tests/`. Do not replace the working simulation with a mock or static demo. Keep rendering to one animation loop, cap pixel ratio, and keep static shadow maps frozen.
+
+- Implemented `src/world.js`: a complete, symmetrical drydock arena with an open turbine hall, ribbed shipping containers, stacked crates, striped barriers, explosive fuel drums, forklifts, gantry crane, perimeter fencing, utility cabinets, floodlights, distant port skyline, and marked team spawns.
+- Added procedural asphalt/sign textures, cached directional shadows, instanced static geometry, four animated health/ammo stations, and analytic AABB/sphere ray intersections.
+- Added sub-stepped circle/box movement, an inflated 1 m navigation grid, and eight-direction A* with corner-cut prevention.
+- Next: detailed weapons, articulated bot models, pooled combat effects, and synthesized audio.
+
+- `src/models.js`now builds three distinct, high-detail weapons (VX-4 carbine, M12 shotgun, Kestrel precision rifle), including rails, fasteners, chambers, magazines, grips, stock assemblies, optics, muzzle brakes, and animated muzzle flashes.
+- Added articulated armored bots with team colors, helmets/visors, tactical rigs, backpacks, weapons, nameplates, and contact shadows.
+- Added pooled tracers, sparks, shell-like debris, explosion flashes, and smoke; no unbounded effect allocation.
+- `src/audio.js`synthesizes weapon reports, impacts, reloads, footsteps, pickup cues, explosions, and match results with WebAudio. Audio starts only after a user gesture.
+- Next: match simulation, player movement, shooting, AI, respawns, and complete game UI.
+
+- Implemented `src/game.js`: fixed-step 4v4 match loop, player movement with acceleration, sprint/ADS/crouch/jump, vertical support and ceiling collision, three working weapons with per-weapon ammo/recoil/spread/reload timing, headshots, shields/regeneration, grenades, explosive barrels, supply stations, kill feed, respawns, score limit, timer, and sudden-death overtime.
+- Bots use line-of-sight target acquisition, reaction delays, burst fire, strafing, cover/reload behavior, shared short-lived squad intel, A* pursuit, health-station recovery, separation, stuck recovery, and occasional grenades. Friendly fire is disabled; spawn protection prevents instant respawn deaths.
+- Added a separate depth-cleared first-person weapon pass so the detailed gun does not clip into walls; animated ADS, reload, weapon switching, recoil, bob, and muzzle light.
+- Added pointer-lock controls with a drag-to-look fallback, pause on focus loss, and touch-input hooks.
+- Next: complete the HUD, deployment/pause/manual/scoreboard/results screens, touch controls, then browser verification and fixes.
+
+- Added `index.html`,`src/style.css`, and`src/main.js`: live 3D deployment screen, selectable loadouts and threat levels, squad roster, tactical minimap, score/timer HUD, health/shields, ammo/weapon slots, reload/interaction prompts, kill feed, hit/kill/headshot feedback, damage direction indicator, death/respawn overlay, pause menu, field manual, hold-Tab scoreboard, and full end-of-match results/rematch.
+- Added mouse, keyboard, pointer-lock fallback, sensitivity control, audio mute, and mobile touch stick/look/action buttons.
+- Fonts are bundled locally; the visual system uses a drydock-derived teal/orange palette with warm/cool neutrals and custom scrollbars.
+- Next: production build, headless-browser runtime checks, full match/interaction verification, responsive screenshots, and repair pass.

@@ -87,6 +87,16 @@ WASD move · mouse look/fire · right mouse aim · Shift sprint · Space jump ·
 - Added persisted operator preferences (`localStorage`, versioned key, validated on load, silently skipped in private mode): mouse sensitivity, mute, render quality, threat level and last loadout are restored on boot.
 - Next: repair pass on the issues found while instrumenting, then the full headless verification run with screenshots.
 
+### 8 — Repair pass: touch input dead-lock and verification harness
+Resumed from step 7 and ran the existing suite end to end for the first time. It had never completed; four distinct defects surfaced, three in the harness and one in the shipped game.
+
+- **Real game bug — touch controls could go completely dead.** `setPointerCapture()` was called unguarded at the top of the stick, look and action-button `pointerdown` handlers. When capture fails (pointer already released, older Android/iOS WebViews, synthetic events) it throws, and the exception aborted the rest of the handler — so `moveStick()` never ran and FIRE/RELOAD/JUMP never fired. Every touch control silently stopped working. Added a `capture()` helper that swallows the failure; capture is now best-effort and input always proceeds. This was caught by the mobile check reporting `moved:false, firing:false` alongside two `No active pointer with the given id` page errors.
+- **Harness — flow check assumed a live hostile.** After 75 s of accelerated combat all four enemies can be mid-respawn simultaneously, so `actors.find(a => a.team === 1 && a.alive)` returned `undefined` and the script crashed on `enemy.spawnProtection`. Added a `liveEnemy()` helper that redeloys a hostile via the real `spawn()` when none is standing.
+- **Harness — racy rematch assertion.** `g.time === 300` can never hold reliably: the fixed-step loop advances the clock the instant the match resumes (measured `299.933` immediately after the click). Now asserts a fresh clock (`time > 299 && elapsed < 1`). Verified by probe that the rematch itself was already correct — scores 0–0, kills 0, state `playing`.
+- **Harness — resource starvation and leaked browsers.** The mobile page could not boot inside the 30 s default because the finished desktop page was still rendering a second SwiftShader WebGL context. The desktop page is now closed before the mobile run, boot waits are 90 s and screenshot waits 120 s. Wrapped the run in `try/catch` so collected page errors are always printed and the browser always closes — previously a failed assertion leaked Chromium and hid the error list.
+- Confirmed working end to end in software WebGL: deploy + loadout selection, movement, fire/reload/switch, grenade throw and detonation, ammo and health stations, 75 s of unscripted bot combat (all seven bots navigating, both teams scoring, bounded grenade pool), player death → respawn, score-limit win, and no desktop runtime errors.
+- Next: first-person viewmodel framing, bot draw-call reduction, then the full green run with responsive screenshots.
+
 ## Handoff notes
 
 The README is updated after each implementation step. Source files live in `src/`; tests live in `tests/`. Do not replace the working simulation with a mock or static demo. Keep rendering to one animation loop, cap pixel ratio, and keep static shadow maps frozen.

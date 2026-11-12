@@ -93,6 +93,10 @@ function deploy() { game.deploy(); if (selectedWeapon) game.switchWeapon(selecte
 function openManual() { manualOpen = true; show('manual', true); game.audio.click(); }
 function closeManual() { manualOpen = false; show('manual', false); }
 function bindUI() {
+  // Pointer capture can legitimately fail (pointer already released, older WebViews,
+  // synthetic events). It must never abort the handler, or the control goes dead.
+  const capture = (el, id) => { try { el.setPointerCapture(id); } catch { /* capture unavailable — input still works */ } };
+
   $('deployBtn').onclick = deploy; $('resumeBtn').onclick = () => game.resume(); $('restartBtn').onclick = deploy; $('rematchBtn').onclick = deploy; $('quitBtn').onclick = () => game.toMenu(); $('resultMenuBtn').onclick = () => game.toMenu(); $('pauseBtn').onclick = () => game.pause();
   $('manualBtn').onclick = openManual; $('pauseManual').onclick = openManual; $('closeManual').onclick = closeManual;
   $('audioBtn').onclick = () => { game.audio.init(); settings.muted = game.audio.toggle(); saveSettings(); updateAudio(settings.muted); }; $('pauseAudio').onclick = () => { settings.muted = game.audio.toggle(); saveSettings(); updateAudio(settings.muted); };
@@ -104,15 +108,15 @@ function bindUI() {
   document.addEventListener('keydown', e => { if (e.key === '?' && ['menu', 'paused'].includes(game.state)) openManual(); if (e.code === 'Escape' && manualOpen) closeManual(); });
   // Touch look is independent of the movement stick and action buttons.
   let lookId = null, lx = 0, ly = 0; const canvas = $('game');
-  canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'touch' && game.state === 'playing') { lookId = e.pointerId; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); } });
+  canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'touch' && game.state === 'playing') { lookId = e.pointerId; lx = e.clientX; ly = e.clientY; capture(canvas, e.pointerId); } });
   canvas.addEventListener('pointermove', e => { if (e.pointerId === lookId) { game.look((e.clientX - lx) * 1.7, (e.clientY - ly) * 1.7); lx = e.clientX; ly = e.clientY; } });
   const endLook = e => { if (e.pointerId === lookId) lookId = null; }; canvas.addEventListener('pointerup', endLook); canvas.addEventListener('pointercancel', endLook);
   const stick = $('stick'), knob = stick.querySelector('i'); let stickId = null;
   const moveStick = e => { const r = stick.getBoundingClientRect(), max = r.width * .34; let dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2; const l = Math.hypot(dx, dy); if (l > max) { dx *= max / l; dy *= max / l; } game.touchMove = { x: dx / max, y: dy / max }; knob.style.transform = `translate(${dx}px,${dy}px)`; };
-  stick.addEventListener('pointerdown', e => { e.preventDefault(); stickId = e.pointerId; stick.setPointerCapture(e.pointerId); moveStick(e); }); stick.addEventListener('pointermove', e => { if (e.pointerId === stickId) moveStick(e); });
+  stick.addEventListener('pointerdown', e => { e.preventDefault(); stickId = e.pointerId; capture(stick, e.pointerId); moveStick(e); }); stick.addEventListener('pointermove', e => { if (e.pointerId === stickId) moveStick(e); });
   const endStick = e => { if (e.pointerId === stickId) { stickId = null; game.touchMove = { x: 0, y: 0 }; knob.style.transform = ''; } }; stick.addEventListener('pointerup', endStick); stick.addEventListener('pointercancel', endStick);
   document.querySelectorAll('[data-touch]').forEach(b => {
-    b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); const a = b.dataset.touch; if (a === 'fire') { game.touchFire = true; game.firePressed = true; b.classList.add('on'); } else if (a === 'ads') { game.touchAds = !game.touchAds; b.classList.toggle('on', game.touchAds); } else if (a === 'reload') game.reload(game.player); else if (a === 'jump') { if (game.player.grounded && !game.player.crouch) { game.player.vy = 7.2; game.player.grounded = false; } } else if (a === 'grenade') game.throwGrenade(game.player); else if (a === 'sprint') { game.touchSprint = !game.touchSprint; b.classList.toggle('on', game.touchSprint); } else if (a === 'crouch') { game.crouchToggle = !game.crouchToggle; b.classList.toggle('on', game.crouchToggle); } else if (a === 'switch') game.switchWeapon((game.player.weaponIndex + 1) % 3); else if (a === 'use') game.interact(); });
+    b.addEventListener('pointerdown', e => { e.preventDefault(); capture(b, e.pointerId); const a = b.dataset.touch; if (a === 'fire') { game.touchFire = true; game.firePressed = true; b.classList.add('on'); } else if (a === 'ads') { game.touchAds = !game.touchAds; b.classList.toggle('on', game.touchAds); } else if (a === 'reload') game.reload(game.player); else if (a === 'jump') { if (game.player.grounded && !game.player.crouch) { game.player.vy = 7.2; game.player.grounded = false; } } else if (a === 'grenade') game.throwGrenade(game.player); else if (a === 'sprint') { game.touchSprint = !game.touchSprint; b.classList.toggle('on', game.touchSprint); } else if (a === 'crouch') { game.crouchToggle = !game.crouchToggle; b.classList.toggle('on', game.crouchToggle); } else if (a === 'switch') game.switchWeapon((game.player.weaponIndex + 1) % 3); else if (a === 'use') game.interact(); });
     const up = () => { if (b.dataset.touch === 'fire') { game.touchFire = false; b.classList.remove('on'); } }; b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
   });
 }

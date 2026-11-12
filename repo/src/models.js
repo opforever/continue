@@ -7,6 +7,9 @@ const geoCache = new Map();
 function geo(key, fn) { if (!geoCache.has(key)) geoCache.set(key, fn()); return geoCache.get(key); }
 const boxGeo = (w, h, d, round = false) => geo(`b${w},${h},${d},${round}`, () => round ? new RoundedBoxGeometry(w, h, d, 2, Math.min(w, h, d) * .16) : new THREE.BoxGeometry(w, h, d));
 const cylGeo = (r, l, r2 = r) => geo(`c${r},${l},${r2}`, () => new THREE.CylinderGeometry(r, r2, l, 12));
+// Open-ended tube: a scope you can actually aim through. Solid cylinders capped both
+// ends and gave the precision rifle a black disc instead of a sight picture.
+const tubeGeo = (r, l) => geo(`t${r},${l}`, () => new THREE.CylinderGeometry(r, r, l, 20, 1, true));
 export const WEAPONS = [
   { id: 'vx4', name: 'VX-4', label: 'ASSAULT CARBINE', mag: 30, reserve: 180, damage: 26, interval: .092, reload: 1.85, spread: .012, adsSpread: .0028, recoil: .018, pellets: 1, range: 95, auto: true, desc: 'Versatile. Reliable. Yours.', rpm: 650 },
   { id: 'm12', name: 'M12', label: 'PUMP SHOTGUN', mag: 8, reserve: 48, damage: 13, interval: .72, reload: 2.5, spread: .047, adsSpread: .031, recoil: .065, pellets: 8, range: 36, auto: false, desc: 'Eight pellets. Close quarters.', rpm: 83 },
